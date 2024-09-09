@@ -18,3 +18,16 @@ for image in folderImages:
     
 print(images, classNames)
 
+def find_encodings(images):
+    encodings = []
+    
+    for image in images:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        encoding = face_recognition.face_encodings(image)[0]
+        encodings.append(encoding)
+        
+    return(encodings)
+
+imageEncodings = find_encodings(images)
+
+print('Image Encodings: ',imageEncodings)
