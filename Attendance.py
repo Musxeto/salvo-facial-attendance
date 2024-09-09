@@ -3,12 +3,14 @@ import numpy as np
 import face_recognition
 import os
 
+# Load images 
 path = 'images'
 images = []
 classNames = []
 folderImages = os.listdir(path)
 print("Images in the folder:", folderImages)
 
+# Reading each image 
 for image in folderImages:
     currentImg = cv2.imread(f'{path}/{image}')
     images.append(currentImg)
@@ -16,17 +18,26 @@ for image in folderImages:
     
 print("Class names:", classNames)
 
+# Function to encode 
 def find_encodings(images):
     encodings = []
     
     for image in images:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        encoding = face_recognition.face_encodings(image)[0]
-        encodings.append(encoding)
+        face_encodings = face_recognition.face_encodings(image)
+        if len(face_encodings) > 0:
+            encodings.append(face_encodings[0])
+        else:
+            print("No faces found in an image.")
         
     return encodings
 
+# Generate encodings for the images
 imageEncodings = find_encodings(images)
+
+if len(imageEncodings) == 0:
+    print("No face encodings were found. Exiting.")
+    exit()
 
 capture = cv2.VideoCapture(0)
 
@@ -49,18 +60,25 @@ while True:
         
         bestMatchIndex = np.argmin(faceDistance)
         
-        if matches[bestMatchIndex] and faceDistance[bestMatchIndex] < 0.5:
-            name = classNames[bestMatchIndex].upper()
+        if matches[bestMatchIndex] and faceDistance[bestMatchIndex] < 0.5:  # Adjust the threshold here
+            name = classNames[bestMatchIndex].upper()  
             print(f"Match found: {name}")
             
-            top, right, bottom, left = facesCurrentFrame[bestMatchIndex]
+            top, right, bottom, left = faceLocation
             top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4
             
             cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 2)
+            
             cv2.rectangle(img, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
+            
             cv2.putText(img, name, (left + 6, bottom - 6), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        else:
+            print("No match found or face is too distant.")
     
     cv2.imshow('Webcam Face Recognition', img)
     
-    cv2.waitKey(1)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
+capture.release()
+cv2.destroyAllWindows()
