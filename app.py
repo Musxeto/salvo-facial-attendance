@@ -10,20 +10,20 @@ imageRomanTest = cv2.cvtColor(imageRomanTest,cv2.COLOR_BGR2RGB)
 
 faceLocation = face_recognition.face_locations(imageRomanTrain)[0]
 encodeRoman = face_recognition.face_encodings(imageRomanTrain)[0]
-cv2.rectangle(imageRomanTrain,(faceLocation[3],faceLocation[0]),(faceLocation[1],faceLocation[1]),(0,250,0),2)
+cv2.rectangle(imageRomanTrain,(faceLocation[3],faceLocation[0]),(faceLocation[1],faceLocation[1]),(0,0,250),2)
 
 faceLocationTest = face_recognition.face_locations(imageRomanTest)[0]
 encodeRomanTest = face_recognition.face_encodings(imageRomanTest)[0]
-cv2.rectangle(imageRomanTest,(faceLocationTest[3],faceLocationTest[0]),(faceLocationTest[1],faceLocationTest[1]),(0,250,0),2)
+cv2.rectangle(imageRomanTest,(faceLocationTest[3],faceLocationTest[0]),(faceLocationTest[1],faceLocationTest[1]),(0,0,250),2)
 
 encodeRoman = np.array(encodeRoman)
 encodeRomanTest = np.array(encodeRomanTest)
 
-results = face_recognition.compare_faces([encodeRoman], encodeRomanTest)
-print("Are the faces the same?", results)
+results = face_recognition.compare_faces([encodeRoman], encodeRomanTest)[0]
+faceDistance = face_recognition.face_distance([encodeRoman],encodeRomanTest)[0]
+cv2.putText(imageRomanTest,f'{results} {round(faceDistance,2)}',(50,50),cv2.FONT_HERSHEY_PLAIN,1,(0,0,255))
+print(results,faceDistance)
 
 cv2.imshow('Roman Reigns',imageRomanTrain)
-
 cv2.imshow('Roman Reigns Test',imageRomanTest)
 cv2.waitKey(0)
-
