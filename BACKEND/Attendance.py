@@ -3,14 +3,13 @@ import numpy as np
 import face_recognition
 import os
 
-# Load images 
+
 path = 'images'
 images = []
 classNames = []
 folderImages = os.listdir(path)
 print("Images in the folder:", folderImages)
 
-# Reading each image 
 for image in folderImages:
     currentImg = cv2.imread(f'{path}/{image}')
     images.append(currentImg)
@@ -32,7 +31,6 @@ def find_encodings(images):
         
     return encodings
 
-# Generate encodings for the images
 imageEncodings = find_encodings(images)
 
 if len(imageEncodings) == 0:
@@ -77,8 +75,7 @@ while True:
     
     cv2.imshow('Webcam Face Recognition', img)
     
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    cv2.waitKey(1) 
 
 capture.release()
 cv2.destroyAllWindows()
