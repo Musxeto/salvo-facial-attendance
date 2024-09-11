@@ -30,6 +30,13 @@ with open("Encodefile.p", "rb") as file:
 encoding_list_known, employee_ids = encoding_list_known_with_ids
 print("Loaded encoded file")
 
+def cleanupdata(current_date):
+    
+    daybeforeyesterday = current_date - timedelta(days=2)
+    query = "DELETE FROM rawdata WHERE date<%s"
+    cursor.execute(query, (daybeforeyesterday,))
+    mydb.commit()
+    
 def calculate_attendance(employee_id, date):  
     print("Calculating attendance for", employee_id, "on", date)      
 
@@ -125,10 +132,8 @@ while True:
 
 
 # Define the time range for comparison
-    start_time = datetime.strptime('11:51:00', '%H:%M:%S').time()
-    end_time = datetime.strptime('12:30:00', '%H:%M:%S').time()
-
-
+    start_time = datetime.strptime('15:56:00', '%H:%M:%S').time()
+    end_time = datetime.strptime('18:30:00', '%H:%M:%S').time()
 
     success, img = cap.read()
     if not success:
@@ -163,7 +168,7 @@ while True:
 
             
             log_attendance(employee_id)
-            # Check if the current time falls within the specified range
+            
     if start_time <= current_time_only <= end_time:
         print("Attendance for the day has been closed")
         query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
@@ -171,6 +176,7 @@ while True:
         result = cursor.fetchall()
         print("result", result)
         final_Attendance(result, current_date)
+        cleanupdata(current_date)
         print("Attendance added to the database")
     else:
         print("Outside the time range for closing attendance")
