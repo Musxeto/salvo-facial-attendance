@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 mydb = mysql.connector.connect(
     host="localhost",
     user="root",
-    password="",
-    database="faceattendancedb"
+    password="root",
+    database="cms"
 )
 
 cursor = mydb.cursor()
@@ -32,30 +32,47 @@ print("Loaded encoded file")
 
 def calculate_attendance(employee_id, date):  
     print("Calculating attendance for", employee_id, "on", date)      
-    query = "SELECT min(log_time) as in_time, max(log_time) as out_time FROM rawdata WHERE employeid=%s AND date=%s"
+
+    # Query to fetch in_time and out_time
+    query = "SELECT min(log_time) as in_time, max(log_time) as out_time FROM rawdata WHERE employee_id=%s AND date=%s"
     cursor.execute(query, (employee_id, date))
-    print("in time,out time calculated")
+    print("in time, out time calculated")
     result = cursor.fetchone()
-    print(result)
+
+    if result is None:
+        print("No attendance data found for the given employee_id and date")
+        return
+
+    in_time, out_time = result
     Status = "present"
 
-    worked = result[1] - result[0]
+    # Calculate hours worked and overtime
+    worked = out_time - in_time
     hours_worked = worked.total_seconds() / 3600
-    if hours_worked >8:
+    if hours_worked > 8:
         overtime = hours_worked - 8
     else:
         overtime = 0
+        
+    # Check for existing record
+    query = "SELECT * FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
+    cursor.execute(query, (employee_id, date))
+    result = cursor.fetchone()
+    print("Duplicates:", result)
 
-    try:
-        query1 = "INSERT INTO attendance (employee_id, date, time_in, time_out, status, hours_worked, is_overtime) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-        cursor.execute(query1, (employee_id, date, result[0], result[1], Status, hours_worked, overtime))
-        mydb.commit()
-    except Exception as e:
-        print("Duplicate entry:", str(e))
-        return
+    if result is None:
+        try:
+            query1 = "INSERT INTO employee_management_attendance (employee_id, date, time_in, time_out, status, hours_worked, is_overtime, comments) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            cursor.execute(query1, (employee_id, date, in_time, out_time, Status, hours_worked, overtime, "ok"))
+            mydb.commit()
+        except Exception as e:
+            print("Error:", str(e))
+            return
+    else:
+        print("Attendance Record Already Exists")
  
     print(f"Attendance for {employee_id} on {date} has been added to the database")
-  
+
 def final_Attendance(employee_ids, date):
     for employee_id in employee_ids:
         calculate_attendance(employee_id[0], date)
@@ -69,8 +86,8 @@ def log_attendance(employee_id):
     check_current_time = datetime.now().time() 
     total_seconds = check_current_time.hour * 3600 + check_current_time.minute * 60 + check_current_time.second + check_current_time.microsecond / 1_000_000
     print("total seconds", total_seconds)
-    # Check if the employee already logged in today
-    query = "SELECT * FROM rawdata WHERE employeid=%s AND date=%s ORDER BY log_time DESC LIMIT 1"
+    
+    query = "SELECT * FROM rawdata WHERE employee_id=%s AND date=%s ORDER BY log_time DESC LIMIT 1"
     cursor.execute(query, (employee_id, current_date))
     result = cursor.fetchone()
     print("result", result)
@@ -78,10 +95,8 @@ def log_attendance(employee_id):
     if result is not None:
 
         print("here")
-        # Convert the last logged in time to a datetime object (assuming in_time is a datetime column)
-        last_log_time = result[3]  # Assuming result[3] is the 'in_time' column
+        last_log_time = result[3]  
         print("last log time", last_log_time)
-       # print("last " , last_log_time)
         print("type " , type(last_log_time))
         
         print("current time", check_current_time)
@@ -94,7 +109,7 @@ def log_attendance(employee_id):
             return
 
     # If no log is found or time difference is more than 10 minutes, log the attendance
-    query = "INSERT INTO rawdata (employeid, date, log_time) VALUES (%s, %s, %s)"
+    query = "INSERT INTO rawdata (employee_id, date, log_time) VALUES (%s, %s, %s)"
     cursor.execute(query, (employee_id, current_date, current_time))
     mydb.commit()
     print(f"Attendance logged for {employee_id} at {current_time}")
@@ -110,8 +125,8 @@ while True:
 
 
 # Define the time range for comparison
-    start_time = datetime.strptime('10:17:00', '%H:%M:%S').time()
-    end_time = datetime.strptime('10:30:00', '%H:%M:%S').time()
+    start_time = datetime.strptime('11:51:00', '%H:%M:%S').time()
+    end_time = datetime.strptime('12:30:00', '%H:%M:%S').time()
 
 
 
@@ -151,7 +166,7 @@ while True:
             # Check if the current time falls within the specified range
     if start_time <= current_time_only <= end_time:
         print("Attendance for the day has been closed")
-        query = "SELECT DISTINCT employeid FROM rawdata WHERE date=%s"
+        query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
         cursor.execute(query, (current_date,))
         result = cursor.fetchall()
         print("result", result)
