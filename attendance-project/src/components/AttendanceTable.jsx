@@ -25,7 +25,7 @@ const AttendanceTable = ({ records }) => {
         {
           table: {
             headerRows: 1,
-            widths: ["*", "*", "*", "*", "*", "*"],
+            widths: ["*", "*", "*", "*"],
             body: [
               [
                 { text: "Employee ID", style: "tableHeader" },
@@ -101,17 +101,6 @@ const AttendanceTable = ({ records }) => {
       { Header: "Employee Name", accessor: "employee_name" },
       { Header: "Date", accessor: "date" },
       { Header: "Log Time", accessor: "log_time" },
-      {
-        Header: "Actions",
-        Cell: ({ row }) => (
-          <button
-            onClick={() => {}}
-            className="bg-blue-500 text-white py-1 px-2 rounded-md"
-          >
-            Edit
-          </button>
-        ),
-      },
     ],
     []
   );
@@ -140,7 +129,7 @@ const AttendanceTable = ({ records }) => {
         pageSize: 10,
         sortBy: [
           {
-            id: "date",
+            id: "log_time",
             desc: true,
           },
         ],
@@ -186,7 +175,7 @@ const AttendanceTable = ({ records }) => {
           {headerGroups.map((headerGroup) => (
             <tr {...headerGroup.getHeaderGroupProps()}>
               {headerGroup.headers.map((column) => (
-                <th
+                <th 
                   {...column.getHeaderProps(column.getSortByToggleProps())}
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
@@ -210,7 +199,7 @@ const AttendanceTable = ({ records }) => {
           {page.map((row) => {
             prepareRow(row);
             return (
-              <tr {...row.getRowProps()}>
+              <tr key={row} {...row.getRowProps()}>
                 {row.cells.map((cell) => (
                   <td
                     {...cell.getCellProps()}

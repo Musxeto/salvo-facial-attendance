@@ -1,15 +1,35 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 const EmployeeModal = ({ employee, isOpen, onClose, isFirstLogin }) => {
+  const [newLog, setNewLog] = useState(null);
+
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
         onClose();
-      }, 60000); 
+      }, 60000); // Close modal after 60 seconds
 
       return () => clearTimeout(timer);
     }
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const ws = new WebSocket("ws://localhost:8000/ws/attendance");
+  
+      ws.onmessage = (event) => {
+        const receivedLog = JSON.parse(event.data);
+        setNewLog(receivedLog);
+      };
+  
+      ws.onclose = () => {
+        console.log("WebSocket closed");
+      };
+  
+      return () => ws.close();
+    }
+  }, [isOpen]);
+  
 
   if (!isOpen) return null;
 
@@ -24,7 +44,7 @@ const EmployeeModal = ({ employee, isOpen, onClose, isFirstLogin }) => {
             className="w-24 h-24 rounded-full border-2 border-turquoise mr-4"
           />
           <div>
-            <h2 className="text-xl font-semibold">{employee.name}</h2>
+            <h2 className="text-xl font-semibold">{employee.employee_name}</h2>
             <p className="text-gray-600">Department: {employee.department}</p>
             <p className="text-gray-600">Position: {employee.position}</p>
           </div>
@@ -32,6 +52,11 @@ const EmployeeModal = ({ employee, isOpen, onClose, isFirstLogin }) => {
         <div className="mt-4 text-turquoise font-bold text-xl">
           {isFirstLogin ? "Welcome! This is your first login today." : "Welcome back!"}
         </div>
+        {newLog && (
+          <div className="mt-4 bg-green-200 text-green-800 p-2 rounded">
+            New log: {JSON.stringify(newLog)}
+          </div>
+        )}
         <div className="mt-6 p-4 bg-caribbean-current text-white rounded-lg text-center">
           <p className="text-lg">
             Status: {employee.status === "in" ? "Clocked In" : "Clocked Out"}
@@ -49,6 +74,5 @@ const EmployeeModal = ({ employee, isOpen, onClose, isFirstLogin }) => {
     </div>
   );
 };
-
 
 export default EmployeeModal;
