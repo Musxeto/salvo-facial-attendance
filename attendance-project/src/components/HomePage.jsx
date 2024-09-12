@@ -6,7 +6,9 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { AiOutlineReload } from "react-icons/ai"; 
 
+const api="http://localhost:8001"
 const HomePage = () => {
+  
   const [records, setRecords] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({});
@@ -45,6 +47,7 @@ const HomePage = () => {
       if (lastLog.employee_id !== newLog.employee_id || lastLog.log_time !== newLog.log_time) {
         setLastLog(newLog);
         setModalContent(newLog);
+        console.log(`${api}${modalContent.employee_image}`)
         setIsModalOpen(true); // Only set to true if there's a new log
       } 
     } catch (error) {
@@ -100,6 +103,7 @@ const HomePage = () => {
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
                   <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
                     <h2 className="text-2xl font-bold mb-4">New Attendance Log</h2>
+                    <img src={`${api}${modalContent.employee_image}`} />
                     <p>
                       <strong>Employee ID:</strong> {modalContent.employee_id}
                     </p>

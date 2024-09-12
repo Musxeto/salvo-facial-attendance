@@ -7,8 +7,13 @@ from typing import List
 from datetime import datetime, date, time, timedelta
 import mysql.connector
 import json
+import os
+from fastapi.staticfiles import StaticFiles
+
 
 app = FastAPI()
+IMAGE_FOLDER = './images'
+app.mount("/images", StaticFiles(directory=IMAGE_FOLDER), name="images")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +39,11 @@ class LogRequest(BaseModel):
 
 class PopupResponse(BaseModel):
     employee_id: int
-    log_time: datetime
+    date: date
+    log_time: time
+    employee_name: str
+    employee_image: str
+    
 
 @app.get("/today_logs/", response_model=List[AttendanceRecord])
 def get_today_logs():
@@ -70,7 +79,15 @@ def get_today_logs():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
 
-@app.get("/last_log/", response_model=AttendanceRecord)
+def find_employee_image(employee_id: int) -> str:
+    # Check for supported image formats: jpg and png
+    for extension in ['jpg', 'png']:
+        image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.{extension}")
+        if os.path.exists(image_path):
+            return f"/images/{employee_id}.{extension}"
+    return None  # Return None if no image is found
+
+@app.get("/last_log/", response_model=PopupResponse)
 def get_last_log():
     current_date = datetime.now().date()
     try:
@@ -79,30 +96,44 @@ def get_last_log():
         query = "SELECT employee_id, log_time FROM rawdata WHERE date=%s ORDER BY log_time DESC LIMIT 1"
         cursor.execute(query, (current_date,))
         log = cursor.fetchone()
+        
         if log:
             employee_id = log[0]
             log_time = log[1]
+            
+            # Fetch employee name
             try:
                 query3 = "SELECT username from employee_management_employee where id=%s"
                 cursor.execute(query3, (employee_id,))
                 userLog = cursor.fetchone()
             except:
                 raise HTTPException(status_code=500, detail="Failed to fetch employee info")
-            employee_name = userLog[0]
             
+            employee_name = userLog[0]
+
+            # Handle log_time format
             if isinstance(log_time, timedelta):
                 log_time = (datetime.min + log_time).time()
             elif isinstance(log_time, time):
                 pass
             else:
                 raise ValueError("Unexpected log_time type")
+            
+            # Find the image for the employee
+            employee_image = find_employee_image(employee_id)
+            
             return {
-                 "employee_id": employee_id, "employee_name":employee_name, "date": current_date, "log_time": log_time
+                "employee_id": employee_id,
+                "employee_name": employee_name,
+                "date": current_date,
+                "log_time": log_time,
+                "employee_image": employee_image
             }
+        
         raise HTTPException(status_code=404, detail="No logs found for today")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch last log: {str(e)}")
-
+    
 # WebSocket endpoint
 active_connections = []
 
@@ -129,3 +160,4 @@ async def websocket_endpoint(websocket: WebSocket):
 async def notify_new_log(log_data):
     for connection in active_connections:
         await connection.send_text(json.dumps(log_data))
+        
