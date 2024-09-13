@@ -1,4 +1,6 @@
 import logging
+
+import uvicorn
 logging.basicConfig(level=logging.INFO)
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +19,7 @@ app.mount("/images", StaticFiles(directory=IMAGE_FOLDER), name="images")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174"],
+    allow_origins=["http://localhost:5174","http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

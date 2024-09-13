@@ -12,6 +12,9 @@ export default {
                 'keppel': 'hsla(169, 55%, 52%, 1)',
                 'prussian-blue': 'hsla(204, 62%, 17%, 1)',
             },
+            fontFamily: {
+                sans: ['Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            },
         },
     },
     plugins: [],
