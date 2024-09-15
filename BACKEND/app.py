@@ -1,15 +1,19 @@
 import logging
-
+from typing import Optional
+import cv2
 import uvicorn
 logging.basicConfig(level=logging.INFO)
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import pydantic
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, constr
 from typing import List
 from datetime import datetime, date, time, timedelta
 import mysql.connector
 import json
 import os
+import django
+import face_recognition
 from fastapi.staticfiles import StaticFiles
 
 
@@ -46,6 +50,79 @@ class PopupResponse(BaseModel):
     employee_name: str
     employee_image: str
     
+class EmployeeSignup(BaseModel):
+    username: constr(min_length=3, max_length=100)
+    first_name: constr(min_length=1, max_length=100)
+    last_name: constr(min_length=1, max_length=100)
+    email: EmailStr
+    password: constr(min_length=8)
+    phone: Optional[constr(min_length=10, max_length=15)] = None
+    alternate_phone: Optional[constr(min_length=10, max_length=15)] = None
+    address: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    employment_date: Optional[str] = None
+    department: Optional[int] = None
+    position: Optional[str] = None
+    salary: Optional[float] = None
+    manager: Optional[int] = None
+    emergency_contact: Optional[str] = None
+    profile_image: Optional[UploadFile] = None
+    is_staff: Optional[bool] = False
+    is_active: Optional[bool] = True
+    is_hr_manager: Optional[bool] = False
+    
+@app.post("/signup/")
+async def signup_employee(
+    username: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    profile_image: UploadFile = File(...),
+):
+    try:
+        mydb = get_db_connection()
+        cursor = mydb.cursor()
+
+        # Insert basic employee details (without email and password)
+        query = """
+        INSERT INTO employee_management_employee (
+            username, first_name, last_name
+        ) VALUES (%s, %s, %s)
+        """
+        values = (username, first_name, last_name)
+        cursor.execute(query, values)
+        mydb.commit()
+
+        # Handle profile image for face recognition
+        if profile_image:
+            employee_id = cursor.lastrowid
+            image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.jpg")
+            with open(image_path, "wb") as image_file:
+                image_file.write(await profile_image.read())
+            
+            image = cv2.imread(image_path)
+            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            encodings = face_recognition.face_encodings(img_rgb)
+
+            if encodings:
+                encoding = encodings[0]
+                encoding_str = ','.join(map(str, encoding.tolist()))
+
+                # Insert face encoding into the database
+                encoding_query = """
+                INSERT INTO Encodings (EmployeeID, Encoding)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE Encoding = VALUES(Encoding)
+                """
+                encoding_values = (employee_id, encoding_str)
+                cursor.execute(encoding_query, encoding_values)
+                mydb.commit()
+            else:
+                raise HTTPException(status_code=400, detail="No face detected in the image.")
+
+        return {"status": "Employee created successfully."}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 @app.get("/today_logs/", response_model=List[AttendanceRecord])
 def get_today_logs():

@@ -22,26 +22,9 @@ import axios from "axios";
 const Signup = () => {
   const [formData, setFormData] = useState({
     first_name: "",
-    middle_name: "",
     last_name: "",
     username: "",
-    email: "",
-    password: "",
-    phone: "",
-    alternate_phone: "",
-    address: "",
-    date_of_birth: "",
-    employment_date: "",
-    department: "",
-    position: "",
-    salary: "",
-    manager: "",
-    emergency_contact: "",
     profile_image: null,
-    imagePreview: null,
-    is_staff: false,
-    is_active: true,
-    is_hr_manager: false,
   });
 
   const [step, setStep] = useState(1);
@@ -49,10 +32,10 @@ const Signup = () => {
   let navigate = useNavigate();
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     });
   };
 
@@ -81,16 +64,14 @@ const Signup = () => {
     switch (currentStep) {
       case 1:
         return formData.first_name && formData.last_name && formData.username;
-      case 2:
-        return formData.email && formData.password;
       case 3:
-        return formData.phone && formData.address;
+        console.log("nigga");
+        return true;
       case 4:
-        return (
-          formData.date_of_birth && formData.department && formData.position
-        );
+        console.log("nigga");
+        return true;
       case 5:
-        return true; // Always validate for the last step
+        return true;
       default:
         return true;
     }
@@ -102,51 +83,23 @@ const Signup = () => {
 
     const formDataObj = new FormData();
     Object.keys(formData).forEach((key) => {
-      if (formData[key] !== null) {
-        formDataObj.append(key, formData[key]);
-      }
+      let value = formData[key];
+      formDataObj.append(key, value);
     });
-    console.log(formData);
+
     axios
-      .post("http://localhost:8000/api/employees/", formDataObj, {
+      .post("http://localhost:8001/signup/", formDataObj, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
           "Content-Type": "multipart/form-data",
         },
       })
       .then((response) => {
-        toast.success("Signed Up Successfully");
-        setFormData({
-          first_name: "",
-          middle_name: "",
-          last_name: "",
-          username: "",
-          email: "",
-          password: "",
-          phone: "",
-          alternate_phone: "",
-          address: "",
-          date_of_birth: "",
-          employment_date: "",
-          department: "",
-          position: "",
-          salary: "",
-          manager: "",
-          emergency_contact: "",
-          profile_image: null,
-          imagePreview: null,
-          is_staff: false,
-          is_active: true,
-          is_hr_manager: false,
-        });
-        setStep(1);
-        toast.success("Successfully Signed Up");
+        toast.success("Signup successful!");
+        navigate("/login");
       })
       .catch((error) => {
-        toast.error("An error occurred. Please try again.");
-      })
-      .finally(() => {
         setLoading(false);
+        toast.error("Signup failed.");
       });
   };
 
@@ -230,238 +183,7 @@ const Signup = () => {
           </>
         )}
 
-        {/* Step 2 */}
-        {step === 2 && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Email</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaEnvelope className="m-2" />
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Password</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaLock className="m-2" />
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <button
-                type="button"
-                onClick={handlePreviousStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={handleNextStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 3 */}
-        {step === 3 && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Phone</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaPhone className="m-2" />
-                <input
-                  type="text"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Alternate Phone</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaPhone className="m-2" />
-                <input
-                  type="text"
-                  name="alternate_phone"
-                  value={formData.alternate_phone}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Address</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaAddressCard className="m-2" />
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <button
-                type="button"
-                onClick={handlePreviousStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={handleNextStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step 4 */}
-        {step === 4 && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Date of Birth</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaCalendar className="m-2" />
-                <input
-                  type="date"
-                  name="date_of_birth"
-                  value={formData.date_of_birth}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Employment Date</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaCalendar className="m-2" />
-                <input
-                  type="date"
-                  name="employment_date"
-                  value={formData.employment_date}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Department</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaAddressCard className="m-2" />
-                <input
-                  type="text"
-                  name="department"
-                  value={formData.department}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Position</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaUserShield className="m-2" />
-                <input
-                  type="text"
-                  name="position"
-                  value={formData.position}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Salary</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaDollarSign className="m-2" />
-                <input
-                  type="text"
-                  name="salary"
-                  value={formData.salary}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                  required
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Manager</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaUserShield className="m-2" />
-                <input
-                  type="text"
-                  name="manager"
-                  value={formData.manager}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Emergency Contact</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaPhone className="m-2" />
-                <input
-                  type="text"
-                  name="emergency_contact"
-                  value={formData.emergency_contact}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-between">
-              <button
-                type="button"
-                onClick={handlePreviousStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={handleNextStep}
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition duration-200"
-              >
-                Next
-              </button>
-            </div>
-          </>
-        )}
-        {step == 5 && (
+        {step == 2 && (
           <>
             <div className="mb-4">
               <label className="block text-sm mb-2">Profile Image</label>
@@ -498,57 +220,8 @@ const Signup = () => {
             </div>
           </>
         )}
-        {/* Step 5 */}
-        {step === 6 && (
+        {step === 3 && (
           <>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">HR Manager</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaUserShield className="m-2" />
-                <select
-                  name="is_hr_manager"
-                  value={formData.is_hr_manager}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                >
-                  <option value={false}>False</option>
-                  <option value={true}>True</option>
-                </select>
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Manager</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                <FaUserShield className="m-2" />
-                <select
-                  name="is_staff"
-                  value={formData.is_staff}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-200 border-none outline-none"
-                >
-                  <option value={false}>False</option>
-                  <option value={true}>True</option>
-                </select>
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm mb-2">Active Status</label>
-              <div className="flex items-center bg-gray-200 rounded">
-                {formData.is_active ? (
-                  <FaToggleOn className="m-2" />
-                ) : (
-                  <FaToggleOff className="m-2" />
-                )}
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={formData.is_active}
-                  onChange={handleInputChange}
-                  className="ml-2"
-                />
-                <span className="ml-2">Active</span>
-              </div>
-            </div>
             <div className="flex justify-between">
               <button
                 type="button"

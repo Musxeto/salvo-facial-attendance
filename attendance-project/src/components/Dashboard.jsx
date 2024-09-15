@@ -54,7 +54,7 @@ const Dashboard = () => {
           </button>
         </form>
       )}
-<ToastContainer />
+      <ToastContainer />
       {isAuthenticated && <Signup />}
     </div>
   );
