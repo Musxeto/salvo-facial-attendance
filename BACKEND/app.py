@@ -70,7 +70,98 @@ class EmployeeSignup(BaseModel):
     is_staff: Optional[bool] = False
     is_active: Optional[bool] = True
     is_hr_manager: Optional[bool] = False
-    
+
+
+@app.get("/search_employee/")
+async def search_employee(query: Optional[str] = None):
+    try:
+        if not query:
+            return []
+
+        mydb = get_db_connection()
+        cursor = mydb.cursor()
+
+        search_query = f"%{query}%"
+        cursor.execute("""
+            SELECT id, username, first_name, last_name 
+            FROM employee_management_employee
+            WHERE username LIKE %s 
+            OR first_name LIKE %s 
+            OR last_name LIKE %s 
+            OR id LIKE %s
+            LIMIT 10
+        """, (search_query, search_query, search_query, search_query))
+
+        employees = cursor.fetchall()
+        result = [
+            {"employee_id": emp[0], "username": emp[1], "first_name": emp[2], "last_name": emp[3]}
+            for emp in employees
+        ]
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+@app.post("/update_encoding/")
+async def update_face_encoding(
+    employee_id: Optional[int] = Form(None),
+    username: Optional[str] = Form(None),
+    profile_image: UploadFile = File(...)
+):
+    try:
+        if not employee_id and not username:
+            raise HTTPException(status_code=400, detail="Employee ID or username is required.")
+
+        mydb = get_db_connection()
+        cursor = mydb.cursor()
+
+        if employee_id:
+            cursor.execute("SELECT id, username FROM employee_management_employee WHERE id = %s", (employee_id,))
+        else:
+            cursor.execute("SELECT id, username FROM employee_management_employee WHERE username = %s", (username,))
+        
+        employee = cursor.fetchone()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found.")
+        
+        employee_id = employee[0]
+        employee_name = employee[1]
+
+        # Handle profile image for face recognition
+        if profile_image:
+            image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.jpg")
+            with open(image_path, "wb") as image_file:
+                image_file.write(await profile_image.read())
+            
+            # Load and process the image for face recognition
+            image = cv2.imread(image_path)
+            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            encodings = face_recognition.face_encodings(img_rgb)
+
+            if encodings:
+                encoding = encodings[0]
+                encoding_str = ','.join(map(str, encoding.tolist()))
+
+                # Insert or update face encoding into the database
+                encoding_query = """
+                INSERT INTO Encodings (EmployeeID, Encoding)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE Encoding = VALUES(Encoding)
+                """
+                encoding_values = (employee_id, encoding_str)
+                cursor.execute(encoding_query, encoding_values)
+                mydb.commit()
+
+                return {"status": "Face encoding updated successfully for employee", "employee_id": employee_id, "employee_name": employee_name}
+            else:
+                raise HTTPException(status_code=400, detail="No face detected in the image.")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
 @app.post("/signup/")
 async def signup_employee(
     username: str = Form(...),

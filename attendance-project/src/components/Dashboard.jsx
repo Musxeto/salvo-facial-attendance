@@ -1,22 +1,29 @@
 import React, { useState } from "react";
 import Signup from "./SignUp";
 import { toast, ToastContainer } from "react-toastify";
+import UpdateEncoding from "./UpdateEncoding";
 
 const Dashboard = () => {
-  const [isAdmin, setIsAdmin] = useState(false); // To check if the user confirms they are an admin
-  const [password, setPassword] = useState(""); // To store the admin password input
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // To check if the admin password is correct
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [password, setPassword] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [selectedTab, setSelectedTab] = useState("signup");
+  const [userExists, setUserExists] = useState(false); 
 
-  const adminPassword = "admin123"; // Replace with your real admin password (or fetch from the backend securely)
-
-  // Function to handle admin authentication
+  const adminPassword = "admin123";
+  
   const handleLogin = (e) => {
     e.preventDefault();
     if (password === adminPassword) {
       setIsAuthenticated(true);
+      setUserExists(false);
     } else {
       toast.error("Incorrect admin password!");
     }
+  };
+
+  const handleTabChange = (tab) => {
+    setSelectedTab(tab);
   };
 
   return (
@@ -54,8 +61,38 @@ const Dashboard = () => {
           </button>
         </form>
       )}
+
       <ToastContainer />
-      {isAuthenticated && <Signup />}
+
+      {isAuthenticated && (
+        <div className="w-full max-w-md">
+          <div className="flex justify-between mb-4">
+            <button
+              onClick={() => handleTabChange("signup")}
+              className={`px-4 py-2 rounded ${
+                selectedTab === "signup"
+                  ? "bg-black text-white"
+                  : "bg-gray-300 text-black"
+              }`}
+            >
+              Sign Up
+            </button>
+            <button
+              onClick={() => handleTabChange("update")}
+              className={`px-4 py-2 rounded ${
+                selectedTab === "update"
+                  ? "bg-black text-white"
+                  : "bg-gray-300 text-black"
+              }`}
+            >
+              Update Encoding
+            </button>
+          </div>
+
+          {selectedTab === "signup" && <Signup />}
+          {selectedTab === "update" && <UpdateEncoding />}
+        </div>
+      )}
     </div>
   );
 };
