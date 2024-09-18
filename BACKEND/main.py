@@ -47,13 +47,14 @@ def today_attenance(cursor, mydb, employee_id, date):
 def load_known_encodings(cursor):
     employee_ids = []
     encoding_list_known = []
+    last_updated = None
     
     print("Loading encoded file...")
-    query = "SELECT EmployeeID, Encoding FROM Encodings"
+    query = "SELECT EmployeeID, Encoding, updated_at FROM Encodings"
     cursor.execute(query)
     employees_data = cursor.fetchall()
 
-    for employee_id, encodings in employees_data:
+    for employee_id, encodings, updated_at in employees_data:
         employee_ids.append(employee_id)
         encodings = encodings.replace('\n', '').strip('[]')
         try:
@@ -65,8 +66,11 @@ def load_known_encodings(cursor):
         except ValueError as e:
             print(f"Error parsing encoding for {employee_id}: {e}")
 
+        last_updated = updated_at
+
     print("Loaded encoded file")
-    return employee_ids, encoding_list_known
+    return employee_ids, encoding_list_known, last_updated
+
 
 def cleanupdata(cursor, CurrentDate):
     daybeforeyesterday = CurrentDate - timedelta(days=2)
@@ -149,17 +153,20 @@ def main():
     mydb = get_db_connection()
     cursor = mydb.cursor()
 
-    employee_ids, encoding_list_known = load_known_encodings(cursor)
+    # Load initial encodings
+    employee_ids, encoding_list_known, last_update = load_known_encodings(cursor)
 
     cap = cv2.VideoCapture(0)
     cap.set(3, 1280)  
     cap.set(4, 720)   
 
+    refresh_interval = 60  # Check for updates every 60 seconds
+    last_check_time = datetime.now()
+
     while True:
         current_time = datetime.now()
         current_date = current_time.date() 
         previous_date = current_time.date() - timedelta(days=1)
-        print("previous date", previous_date)
         current_time_only = current_time.time()
 
         start_time = datetime.strptime('11:02:00', '%H:%M:%S').time()
@@ -176,7 +183,6 @@ def main():
         encode_current_frame = face_recognition.face_encodings(img_small, face_current_frame)
 
         for encode_face, face_location in zip(encode_current_frame, face_current_frame):
-            print("face current = ", type(encode_face))
             # Compare faces and get distances
             face_distance = face_recognition.face_distance(encoding_list_known, encode_face)
 
@@ -207,6 +213,14 @@ def main():
             else:
                 print(f"Face distance too large: {best_distance}, no match.")
         
+        # Check if it's time to refresh encodings
+        if (current_time - last_check_time).total_seconds() >= refresh_interval:
+            employee_ids, encoding_list_known, new_last_update = load_known_encodings(cursor)
+            if last_update != new_last_update:
+                print("Encodings updated.")
+                last_update = new_last_update
+            last_check_time = current_time
+
         if start_time <= current_time_only <= end_time:
             print("Attendance for the day has been closed")
             query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
@@ -229,6 +243,7 @@ def main():
     mydb.close()
 
 main()
+
 
 
 # mydb = get_db_connection()
