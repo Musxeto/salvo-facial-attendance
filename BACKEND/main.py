@@ -39,6 +39,7 @@ def today_attenance(cursor, mydb, employee_id, date):
 
 
         print("More then 1 record found")
+        
 
         return
 
@@ -74,50 +75,50 @@ def load_known_encodings(cursor):
 
 def cleanupdata(cursor, CurrentDate):
     daybeforeyesterday = CurrentDate - timedelta(days=2)
-    query = "DELETE FROM attendance WHERE date=%s"
+    query = "DELETE FROM rawdata WHERE date<=%s"
     cursor.execute(query, (daybeforeyesterday,))
     print("Attendance data for", daybeforeyesterday, "has been deleted")
 
-def calculate_attendance(cursor, mydb, employee_id, date):  
-    print("Calculating attendance for", employee_id, "on", date)      
-    query = "SELECT min(log_time) as in_time, max(log_time) as out_time FROM rawdata WHERE employee_id=%s AND date=%s"
-    cursor.execute(query, (employee_id, date))
-    print("in time, out time calculated")
-    result = cursor.fetchone()
+# def calculate_attendance(cursor, mydb, employee_id, date):  
+#     print("Calculating attendance for", employee_id, "on", date)      
+#     query = "SELECT min(log_time) as in_time, max(log_time) as out_time FROM rawdata WHERE employee_id=%s AND date=%s"
+#     cursor.execute(query, (employee_id, date))
+#     print("in time, out time calculated")
+#     result = cursor.fetchone()
 
-    if result is None:
-        print("No attendance data found for the given employee_id and date")
-        return
+#     if result is None:
+#         print("No attendance data found for the given employee_id and date")
+#         return
 
-    in_time, out_time = result
-    Status = "present"
-    print("in time", in_time)
-    print("out time", out_time)
-    worked = out_time - in_time
-    hours_worked = worked.total_seconds() / 3600
-    overtime = max(0, hours_worked - 8)
+#     in_time, out_time = result
+#     Status = "present"
+#     print("in time", in_time)
+#     print("out time", out_time)
+#     worked = out_time - in_time
+#     hours_worked = worked.total_seconds() / 3600
+#     overtime = max(0, hours_worked - 8)
     
-    query = "SELECT * FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
-    cursor.execute(query, (employee_id, date))
-    result = cursor.fetchone()
-    print("Duplicates:", result)
+#     query = "SELECT * FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
+#     cursor.execute(query, (employee_id, date))
+#     result = cursor.fetchone()
+#     print("Duplicates:", result)
 
-    if result is None:
-        try:
-            query1 = "INSERT INTO employee_management_attendance (employee_id, date, time_in, time_out, status, hours_worked, is_overtime, comments) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-            cursor.execute(query1, (employee_id, date, in_time, out_time, Status, hours_worked, overtime, "ok"))
-            mydb.commit()
-        except Exception as e:
-            print("Error:", str(e))
-            return
-    else:
-        print("Attendance Record Already Exists")
+#     if result is None:
+#         try:
+#             query1 = "INSERT INTO employee_management_attendance (employee_id, date, time_in, time_out, status, hours_worked, is_overtime, comments) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+#             cursor.execute(query1, (employee_id, date, in_time, out_time, Status, hours_worked, overtime, "ok"))
+#             mydb.commit()
+#         except Exception as e:
+#             print("Error:", str(e))
+#             return
+#     else:
+#         print("Attendance Record Already Exists")
  
-    print(f"Attendance for {employee_id} on {date} has been added to the database")
+#     print(f"Attendance for {employee_id} on {date} has been added to the database")
 
-def final_Attendance(cursor, mydb, employee_ids, date):
-    for employee_id in employee_ids:
-        calculate_attendance(cursor, mydb, employee_id[0], date)
+# def final_Attendance(cursor, mydb, employee_ids, date):
+#     for employee_id in employee_ids:
+#         calculate_attendance(cursor, mydb, employee_id[0], date)
 
 def log_attendance(cursor, mydb, employee_id):
     current_date = datetime.now().date()
@@ -169,8 +170,7 @@ def main():
         previous_date = current_time.date() - timedelta(days=1)
         current_time_only = current_time.time()
 
-        start_time = datetime.strptime('11:02:00', '%H:%M:%S').time()
-        end_time = datetime.strptime('12:51:00', '%H:%M:%S').time()
+
 
         success, img = cap.read()
         if not success:
@@ -221,16 +221,16 @@ def main():
                 last_update = new_last_update
             last_check_time = current_time
 
-        if start_time <= current_time_only <= end_time:
-            print("Attendance for the day has been closed")
-            query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
-            cursor.execute(query, (current_date,))
-            result = cursor.fetchall()
-            print("result", result)
-            final_Attendance(cursor, mydb, result, current_date)
-            print("Attendance added to the database")
-        else:
-            print("Outside the time range for closing attendance")
+        
+        print("Attendance for the day has been closed")
+        query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
+        cursor.execute(query, (current_date,))
+        result = cursor.fetchall()
+        print("result", result)
+        for employee_id in result:
+            today_attenance(cursor,mydb,employee_id[0],current_date)
+        print("Attendance added to the database")
+        cleanupdata(cursor,current_date)
 
         cv2.imshow("Face Attendance", img)
 

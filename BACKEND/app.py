@@ -233,22 +233,23 @@ def get_today_logs():
                 query3 = "SELECT username from employee_management_employee where id=%s"
                 cursor.execute(query3, (employee_id,))
                 userLog = cursor.fetchone()
-            except:
-                raise HTTPException(status_code=500, detail="Failed to fetch employee info")
-            employee_name = userLog[0]
-            if isinstance(log_time, timedelta):
-                log_time = (datetime.min + log_time).time()
-            elif isinstance(log_time, time):
-                pass
-            else:
-                raise ValueError("Unexpected log_time type")
-            result.append(
-                {"employee_id": employee_id, "employee_name":employee_name, "date": current_date, "log_time": log_time}
-            )
+                employee_name = userLog[0]
+                if isinstance(log_time, timedelta):
+                    log_time = (datetime.min + log_time).time()
+                elif isinstance(log_time, time):
+                    pass
+                else:
+                    logging.error(f"Unexpected log_time type: {type(log_time)}")
+                    continue
+                result.append(
+                    {"employee_id": employee_id, "employee_name": employee_name, "date": current_date, "log_time": log_time}
+                )
+            except Exception as e:
+                logging.error(f"Failed to fetch employee info: {str(e)}")
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
-
+        logging.error(f"Failed to fetch logs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch logs")
 def find_employee_image(employee_id: int) -> str:
     # Check for supported image formats: jpg and png
     for extension in ['jpg', 'png']:
