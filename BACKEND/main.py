@@ -3,7 +3,7 @@ import mysql.connector
 from datetime import datetime, timedelta
 import cv2
 import face_recognition
-
+import os
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
@@ -12,6 +12,38 @@ def get_db_connection():
         database="cms"
     )
 
+
+def today_attenance(cursor, mydb, employee_id, date):
+    query = "SELECT log_time FROM rawdata WHERE employee_id=%s AND date=%s"
+    cursor.execute(query, (employee_id, date))
+    result = cursor.fetchall()
+    print("result", result)
+    if len(result) >1:
+        log_times = [log_time[0] for log_time in result]
+        in_time = min(log_times)
+        out_time = max(log_times)
+
+        Status = "present"
+        print("in time", in_time)
+        print("out time", out_time)
+        worked = out_time - in_time
+        hours_worked = worked.total_seconds() / 3600
+        overtime = max(0, hours_worked - 8)
+        sql='INSERT into employee_management_attendance (employee_id, date, time_in, time_out,status,comments,hours_worked,is_overtime) VALUES (%s, %s, %s, %s,%s, %s, %s, %s)'
+        val=(employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
+        cursor.execute(sql, val)
+        mydb.commit()
+
+        print(f"Attendance for {employee_id} on {date} has been added to the database")
+
+
+
+        print("More then 1 record found")
+
+        return
+
+
+    
 def load_known_encodings(cursor):
     employee_ids = []
     encoding_list_known = []
@@ -38,7 +70,7 @@ def load_known_encodings(cursor):
 
 def cleanupdata(cursor, CurrentDate):
     daybeforeyesterday = CurrentDate - timedelta(days=2)
-    query = "DELETE FROM employee_management_attendance WHERE date=%s"
+    query = "DELETE FROM attendance WHERE date=%s"
     cursor.execute(query, (daybeforeyesterday,))
     print("Attendance data for", daybeforeyesterday, "has been deleted")
 
@@ -144,28 +176,36 @@ def main():
         encode_current_frame = face_recognition.face_encodings(img_small, face_current_frame)
 
         for encode_face, face_location in zip(encode_current_frame, face_current_frame):
-            print("face curent = ",type(encode_face))
-            matches = face_recognition.compare_faces(encoding_list_known, encode_face)
+            print("face current = ", type(encode_face))
+            # Compare faces and get distances
             face_distance = face_recognition.face_distance(encoding_list_known, encode_face)
-            
-            if len(face_distance) == 0:
+
+            if len(face_distance) <= 0:
                 print("No face distances found.")
                 continue
-            
-            match_index = np.argmin(face_distance)
 
-            if matches[match_index]:
-                employee_id = employee_ids[match_index]
-                print(f"Known face detected: {employee_id}")
+            # Find the best match with minimum distance
+            best_match_index = np.argmin(face_distance)
+            best_distance = face_distance[best_match_index]
 
+            # Set a stricter threshold for the distance (e.g., 0.4)
+            if best_distance < 0.4:
+                employee_id = employee_ids[best_match_index]
+                print(f"Known face detected: {employee_id} with distance: {best_distance}")
+
+                # Draw rectangle around the face
                 top, right, bottom, left = face_location
-                top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4  
+                top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4
                 cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 2)
 
+                # Display the employee ID
                 employee_id_str = str(employee_id)
                 cv2.putText(img, employee_id_str, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
 
+                # Log attendance
                 log_attendance(cursor, mydb, employee_id)
+            else:
+                print(f"Face distance too large: {best_distance}, no match.")
         
         if start_time <= current_time_only <= end_time:
             print("Attendance for the day has been closed")
@@ -189,3 +229,8 @@ def main():
     mydb.close()
 
 main()
+
+
+# mydb = get_db_connection()
+# cursor = mydb.cursor()
+# today_attenance(cursor, mydb, 56, "2024-09-16")
