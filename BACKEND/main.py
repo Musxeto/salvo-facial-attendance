@@ -15,13 +15,9 @@ def get_db_connection():
 
 def today_attendance(cursor, mydb, employee_id, date):
     # Check if an entry for the employee on the given date already exists
-    check_query = "SELECT COUNT(*) FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
+    check_query = "SELECT time_in, time_out FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
     cursor.execute(check_query, (employee_id, date))
-    record_exists = cursor.fetchone()[0]
-    
-    if record_exists > 0:
-        print(f"Attendance for {employee_id} on {date} already exists.")
-        return  # Exit the function if a record is already present
+    attendance_record = cursor.fetchone()
     
     # Fetch log times from rawdata table
     query = "SELECT log_time FROM rawdata WHERE employee_id=%s AND date=%s"
@@ -35,7 +31,7 @@ def today_attendance(cursor, mydb, employee_id, date):
         log_times = [log_time[0] for log_time in result]
         in_time = min(log_times)
         out_time = max(log_times)
-
+        
         Status = "present"
         print("in time", in_time)
         print("out time", out_time)
@@ -45,21 +41,55 @@ def today_attendance(cursor, mydb, employee_id, date):
         hours_worked = worked.total_seconds() / 3600
         overtime = max(0, hours_worked - 8)
 
-        # Insert attendance record into employee_management_attendance table
-        sql = '''
-            INSERT INTO employee_management_attendance 
-            (employee_id, date, time_in, time_out, status, comments, hours_worked, is_overtime)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        '''
-        val = (employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
-        cursor.execute(sql, val)
-        mydb.commit()
+        if attendance_record:
+            # Debugging: check the existing time_out value
+            print(f"Existing time_in: {attendance_record[0]}, Existing time_out: {attendance_record[1]}")
 
-        print(f"Attendance for {employee_id} on {date} has been added to the database.")
+            # Record exists: Update time_out and calculate hours if time_out was previously null
+            update_query = '''
+                UPDATE employee_management_attendance
+                SET time_out = %s, hours_worked = %s, is_overtime = %s
+                WHERE employee_id = %s AND date = %s
+            '''
+            cursor.execute(update_query, (out_time, hours_worked, overtime, employee_id, date))
+            mydb.commit()  # Ensure the update is committed
+            print(f"Attendance for {employee_id} on {date} has been updated with time_out.")
+
+        else:
+            # Insert new record with time_out NULL if only logged in
+            sql = '''
+                INSERT INTO employee_management_attendance 
+                (employee_id, date, time_in, time_out, status, comments, hours_worked, is_overtime)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            '''
+            val = (employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
+            cursor.execute(sql, val)
+            mydb.commit()
+            print(f"Attendance for {employee_id} on {date} has been added to the database.")
     else:
-        print("Insufficient records to calculate in/out time.")
+        # If only one log, insert in_time and leave out_time as NULL
+        if len(result) == 1:
+            in_time = result[0][0]
+            Status = "present"
+            
+            # Check if an entry exists before inserting a new one
+            if not attendance_record:
+                sql = '''
+                    INSERT INTO employee_management_attendance 
+                    (employee_id, date, time_in, time_out, status, comments, hours_worked, is_overtime)
+                    VALUES (%s, %s, %s, NULL, %s, %s, NULL, 0)
+                '''
+                val = (employee_id, date, in_time, Status, "Logged in, no time out yet")
+                cursor.execute(sql, val)
+                mydb.commit()
+                print(f"Attendance for {employee_id} on {date} logged with only in_time (no time_out).")
+            else:
+                print(f"Attendance for {employee_id} on {date} already exists with in_time.")
+        else:
+            print("Insufficient records to calculate in/out time.")
     
     return
+
 
     
 def load_known_encodings(cursor):
