@@ -13,12 +13,25 @@ def get_db_connection():
     )
 
 
-def today_attenance(cursor, mydb, employee_id, date):
+def today_attendance(cursor, mydb, employee_id, date):
+    # Check if an entry for the employee on the given date already exists
+    check_query = "SELECT COUNT(*) FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
+    cursor.execute(check_query, (employee_id, date))
+    record_exists = cursor.fetchone()[0]
+    
+    if record_exists > 0:
+        print(f"Attendance for {employee_id} on {date} already exists.")
+        return  # Exit the function if a record is already present
+    
+    # Fetch log times from rawdata table
     query = "SELECT log_time FROM rawdata WHERE employee_id=%s AND date=%s"
     cursor.execute(query, (employee_id, date))
     result = cursor.fetchall()
+    
     print("result", result)
-    if len(result) >1:
+    
+    if len(result) > 1:
+        # Extract in_time and out_time
         log_times = [log_time[0] for log_time in result]
         in_time = min(log_times)
         out_time = max(log_times)
@@ -26,23 +39,27 @@ def today_attenance(cursor, mydb, employee_id, date):
         Status = "present"
         print("in time", in_time)
         print("out time", out_time)
+
+        # Calculate hours worked and overtime
         worked = out_time - in_time
         hours_worked = worked.total_seconds() / 3600
         overtime = max(0, hours_worked - 8)
-        sql='INSERT into employee_management_attendance (employee_id, date, time_in, time_out,status,comments,hours_worked,is_overtime) VALUES (%s, %s, %s, %s,%s, %s, %s, %s)'
-        val=(employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
+
+        # Insert attendance record into employee_management_attendance table
+        sql = '''
+            INSERT INTO employee_management_attendance 
+            (employee_id, date, time_in, time_out, status, comments, hours_worked, is_overtime)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        '''
+        val = (employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
         cursor.execute(sql, val)
         mydb.commit()
 
-        print(f"Attendance for {employee_id} on {date} has been added to the database")
-
-
-
-        print("More then 1 record found")
-        
-
-        return
-
+        print(f"Attendance for {employee_id} on {date} has been added to the database.")
+    else:
+        print("Insufficient records to calculate in/out time.")
+    
+    return
 
     
 def load_known_encodings(cursor):
@@ -228,7 +245,7 @@ def main():
         result = cursor.fetchall()
         print("result", result)
         for employee_id in result:
-            today_attenance(cursor,mydb,employee_id[0],current_date)
+            today_attendance(cursor,mydb,employee_id[0],current_date)
         print("Attendance added to the database")
         cleanupdata(cursor,current_date)
 
