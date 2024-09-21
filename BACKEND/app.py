@@ -50,27 +50,6 @@ class PopupResponse(BaseModel):
     employee_name: str
     employee_image: str
     
-class EmployeeSignup(BaseModel):
-    username: constr(min_length=3, max_length=100)
-    first_name: constr(min_length=1, max_length=100)
-    last_name: constr(min_length=1, max_length=100)
-    email: EmailStr
-    password: constr(min_length=8)
-    phone: Optional[constr(min_length=10, max_length=15)] = None
-    alternate_phone: Optional[constr(min_length=10, max_length=15)] = None
-    address: Optional[str] = None
-    date_of_birth: Optional[str] = None
-    employment_date: Optional[str] = None
-    department: Optional[int] = None
-    position: Optional[str] = None
-    salary: Optional[float] = None
-    manager: Optional[int] = None
-    emergency_contact: Optional[str] = None
-    profile_image: Optional[UploadFile] = None
-    is_staff: Optional[bool] = False
-    is_active: Optional[bool] = True
-    is_hr_manager: Optional[bool] = False
-
 
 @app.get("/search_employee/")
 async def search_employee(query: Optional[str] = None):
