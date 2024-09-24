@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { FaUser, FaArrowRight } from "react-icons/fa";
+import { FaUser, FaArrowRight, FaTrash } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const UpdateEncoding = () => {
   const [formData, setFormData] = useState({
     employee_id: "",
-    profile_image: null,
-    imagePreview: null,
+    profile_images: [], // For multiple images
   });
 
+  const [imagePreviews, setImagePreviews] = useState([]); // Previews for the selected images
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+
+  const fileInputRef = useRef(null); // Ref to programmatically trigger file input
 
   // Fetch employees based on the search query
   useEffect(() => {
@@ -59,13 +61,42 @@ const UpdateEncoding = () => {
     }
   };
 
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setFormData((prevState) => ({
+      ...prevState,
+      profile_images: [...prevState.profile_images, ...files], // Append new files
+    }));
+
+    // Create image previews
+    const previews = files.map((file) => URL.createObjectURL(file));
+    setImagePreviews((prevState) => [...prevState, ...previews]); // Append new previews
+  };
+
+  const handleRemoveImage = (index) => {
+    setFormData((prevState) => {
+      const newImages = [...prevState.profile_images];
+      newImages.splice(index, 1); // Remove the image from the array
+      return { ...prevState, profile_images: newImages };
+    });
+    setImagePreviews((prevState) => {
+      const newPreviews = [...prevState];
+      newPreviews.splice(index, 1); // Remove the preview
+      return newPreviews;
+    });
+  };
+
   const handleUpdateEncoding = (e) => {
     e.preventDefault();
     setLoading(true);
 
     const formDataObj = new FormData();
     formDataObj.append("employee_id", formData.employee_id);
-    formDataObj.append("profile_image", formData.profile_image);
+
+    // Append multiple images to FormData
+    formData.profile_images.forEach((image) => {
+      formDataObj.append(`profile_images`, image); // `profile_images[]` will send as an array to the backend
+    });
 
     axios
       .post("http://localhost:8001/update_encoding/", formDataObj, {
@@ -79,6 +110,10 @@ const UpdateEncoding = () => {
         setLoading(false);
         toast.error("Failed to update encoding.");
       });
+  };
+
+  const handleAddMoreFiles = () => {
+    fileInputRef.current.click(); // Trigger file input click programmatically
   };
 
   return (
@@ -134,21 +169,48 @@ const UpdateEncoding = () => {
         {step === 2 && (
           <>
             <div className="mb-4">
-              <label className="block text-sm mb-2">Profile Image</label>
+              <label className="block text-sm mb-2">Profile Images</label>
               <input
+                ref={fileInputRef}
                 type="file"
-                name="profile_image"
+                name="profile_images"
                 accept="image/*"
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    profile_image: e.target.files[0],
-                  })
-                }
-                className="w-full p-2 bg-gray-200 border-none outline-none"
-                required
+                multiple // Allow multiple image selection
+                onChange={handleFileChange}
+                className="w-full p-2 bg-gray-200 border-none outline-none hidden" // Hide the input
               />
+
+              {/* Button to trigger file input */}
+              <button
+                type="button"
+                onClick={handleAddMoreFiles}
+                className="bg-gray-500 text-white p-2 rounded hover:bg-gray-600 transition duration-200"
+              >
+                Add More Files
+              </button>
             </div>
+
+            {/* Preview Selected Images */}
+            {imagePreviews.length > 0 && (
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                {imagePreviews.map((preview, index) => (
+                  <div className="relative" key={index}>
+                    <img
+                      src={preview}
+                      alt={`Selected image ${index + 1}`}
+                      className="w-full h-32 object-cover rounded-lg" // Consistent height
+                    />
+                    <button
+                      type="button"
+                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 m-1"
+                      onClick={() => handleRemoveImage(index)}
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <button
               type="submit"

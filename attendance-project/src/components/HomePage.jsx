@@ -22,7 +22,7 @@ const HomePage = () => {
       fetchLastLog();
       const intervalId = setInterval(() => {
         fetchLastLog();
-      }, 5000);
+      }, 2000);
 
       return () => clearInterval(intervalId);
     }
@@ -53,7 +53,6 @@ const HomePage = () => {
       }
     } catch (error) {
       console.error("Error fetching last log:", error);
-      toast.error("Error fetching last log");
     }
   };
 

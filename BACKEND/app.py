@@ -87,7 +87,7 @@ async def search_employee(query: Optional[str] = None):
 async def update_face_encoding(
     employee_id: Optional[int] = Form(None),
     username: Optional[str] = Form(None),
-    profile_image: UploadFile = File(...)
+    profile_images: List[UploadFile] = File(...),
 ):
     try:
         if not employee_id and not username:
@@ -96,6 +96,7 @@ async def update_face_encoding(
         mydb = get_db_connection()
         cursor = mydb.cursor()
 
+        # Fetch employee by ID or username
         if employee_id:
             cursor.execute("SELECT id, username FROM employee_management_employee WHERE id = %s", (employee_id,))
         else:
@@ -109,88 +110,78 @@ async def update_face_encoding(
         employee_id = employee[0]
         employee_name = employee[1]
 
-        # Handle profile image for face recognition
-        if profile_image:
-            image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.jpg")
-            with open(image_path, "wb") as image_file:
-                image_file.write(await profile_image.read())
-            
-            # Load and process the image for face recognition
-            image = cv2.imread(image_path)
-            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            encodings = face_recognition.face_encodings(img_rgb)
+        # Create a directory for the employee if it doesn't exist
+        employee_folder = os.path.join(IMAGE_FOLDER, str(employee_id))
+        os.makedirs(employee_folder, exist_ok=True)
+
+        # Process all uploaded images
+        if profile_images:
+            encodings = []
+            for image_file in profile_images:
+                # Generate a unique filename
+                extension = image_file.filename.split('.')[-1]  # Get the file extension
+                base_filename = f"{employee_id}"
+                
+                # Find the next available filename
+                file_count = 0
+                new_image_name = f"{base_filename}.{extension}"
+                while os.path.exists(os.path.join(employee_folder, new_image_name)):
+                    file_count += 1
+                    new_image_name = f"{base_filename}_{file_count}.{extension}"
+
+                # Save the image
+                image_path = os.path.join(employee_folder, new_image_name)
+                with open(image_path, "wb") as image_file_stream:
+                    image_file_stream.write(await image_file.read())
+
+                # Load and process the uploaded image for face recognition
+                image = cv2.imread(image_path)
+                if image is None:
+                    raise HTTPException(status_code=400, detail="Uploaded image could not be read.")
+
+                img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                image_encodings = face_recognition.face_encodings(img_rgb)
+
+                if image_encodings:
+                    encodings.extend(image_encodings)
 
             if encodings:
-                encoding = encodings[0]
-                encoding_str = ','.join(map(str, encoding.tolist()))
+                # Store the encodings in JSON format
+                encodings_json = json.dumps([encoding.tolist() for encoding in encodings])
 
-                # Insert or update face encoding into the database
-                encoding_query = """
-                INSERT INTO Encodings (EmployeeID, Encoding)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE Encoding = VALUES(Encoding)
-                """
-                encoding_values = (employee_id, encoding_str)
-                cursor.execute(encoding_query, encoding_values)
+                # Check if encodings already exist for this employee
+                encoding_query = "SELECT * FROM Encodings WHERE employeeid = %s"
+                cursor.execute(encoding_query, (employee_id,))
+                existing_encodings = cursor.fetchone()
+
+                if existing_encodings:
+                    # If encodings exist, update the existing record
+                    update_query = """
+                    UPDATE Encodings 
+                    SET encoding = %s, updated_at = CURRENT_TIMESTAMP 
+                    WHERE employeeid = %s
+                    """
+                    cursor.execute(update_query, (encodings_json, employee_id))
+                else:
+                    # If encodings do not exist, insert a new record
+                    insert_query = """
+                    INSERT INTO Encodings (employeeid, encoding)
+                    VALUES (%s, %s)
+                    """
+                    cursor.execute(insert_query, (employee_id, encodings_json))
+
                 mydb.commit()
 
-                return {"status": "Face encoding updated successfully for employee", "employee_id": employee_id, "employee_name": employee_name}
+                return {
+                    "status": "Face encoding updated successfully for employee",
+                    "employee_id": employee_id,
+                    "employee_name": employee_name
+                }
             else:
-                raise HTTPException(status_code=400, detail="No face detected in the image.")
+                raise HTTPException(status_code=400, detail="No faces detected in the uploaded images.")
+        else:
+            raise HTTPException(status_code=400, detail="No images were uploaded.")
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-@app.post("/signup/")
-async def signup_employee(
-    username: str = Form(...),
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    profile_image: UploadFile = File(...),
-):
-    try:
-        mydb = get_db_connection()
-        cursor = mydb.cursor()
-
-        # Insert basic employee details (without email and password)
-        query = """
-        INSERT INTO employee_management_employee (
-            username, first_name, last_name
-        ) VALUES (%s, %s, %s)
-        """
-        values = (username, first_name, last_name)
-        cursor.execute(query, values)
-        mydb.commit()
-
-        # Handle profile image for face recognition
-        if profile_image:
-            employee_id = cursor.lastrowid
-            image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.jpg")
-            with open(image_path, "wb") as image_file:
-                image_file.write(await profile_image.read())
-            
-            image = cv2.imread(image_path)
-            img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            encodings = face_recognition.face_encodings(img_rgb)
-
-            if encodings:
-                encoding = encodings[0]
-                encoding_str = ','.join(map(str, encoding.tolist()))
-
-                # Insert face encoding into the database
-                encoding_query = """
-                INSERT INTO Encodings (EmployeeID, Encoding)
-                VALUES (%s, %s)
-                ON DUPLICATE KEY UPDATE Encoding = VALUES(Encoding)
-                """
-                encoding_values = (employee_id, encoding_str)
-                cursor.execute(encoding_query, encoding_values)
-                mydb.commit()
-            else:
-                raise HTTPException(status_code=400, detail="No face detected in the image.")
-
-        return {"status": "Employee created successfully."}
-    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
@@ -229,13 +220,6 @@ def get_today_logs():
     except Exception as e:
         logging.error(f"Failed to fetch logs: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch logs")
-def find_employee_image(employee_id: int) -> str:
-    # Check for supported image formats: jpg and png
-    for extension in ['jpg', 'png']:
-        image_path = os.path.join(IMAGE_FOLDER, f"{employee_id}.{extension}")
-        if os.path.exists(image_path):
-            return f"/images/{employee_id}.{extension}"
-    return None  # Return None if no image is found
 
 @app.get("/last_log/", response_model=PopupResponse)
 def get_last_log():
@@ -246,68 +230,54 @@ def get_last_log():
         query = "SELECT employee_id, log_time FROM rawdata WHERE date=%s ORDER BY log_time DESC LIMIT 1"
         cursor.execute(query, (current_date,))
         log = cursor.fetchone()
-        
+
         if log:
             employee_id = log[0]
             log_time = log[1]
-            
+
+            # Debug output
+            print("Fetched log:", log)
+            print("log_time type:", type(log_time))
+
             # Fetch employee name
-            try:
-                query3 = "SELECT username from employee_management_employee where id=%s"
-                cursor.execute(query3, (employee_id,))
-                userLog = cursor.fetchone()
-            except:
-                raise HTTPException(status_code=500, detail="Failed to fetch employee info")
-            
+            query3 = "SELECT username from employee_management_employee where id=%s"
+            cursor.execute(query3, (employee_id,))
+            userLog = cursor.fetchone()
             employee_name = userLog[0]
 
-            # Handle log_time format
+            # Convert log_time (timedelta) to string format
             if isinstance(log_time, timedelta):
-                log_time = (datetime.min + log_time).time()
-            elif isinstance(log_time, time):
-                pass
+                total_seconds = int(log_time.total_seconds())
+                hours, remainder = divmod(total_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                log_time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
             else:
                 raise ValueError("Unexpected log_time type")
-            
-            # Find the image for the employee
-            employee_image = find_employee_image(employee_id)
-            
+
+            # Find the last image for the employee
+            employee_image = find_employee_image(employee_id) or ""  # Use empty string if None
+
             return {
                 "employee_id": employee_id,
                 "employee_name": employee_name,
                 "date": current_date,
-                "log_time": log_time,
+                "log_time": log_time_str,
                 "employee_image": employee_image
             }
-        
+
         raise HTTPException(status_code=404, detail="No logs found for today")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch last log: {str(e)}")
+   
     
-# WebSocket endpoint
-active_connections = []
-
-@app.websocket("/ws/attendance")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    logging.info("WebSocket connection established")
-    active_connections.append(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            logging.info(f"Received data: {data}")
-            # Broadcast to all connected clients
-            for connection in active_connections:
-                if connection is not websocket:
-                    await connection.send_text(data)
-    except WebSocketDisconnect:
-        logging.info("WebSocket disconnected")
-        active_connections.remove(websocket)
-    except Exception as e:
-        logging.error(f"WebSocket error: {e}")
-        active_connections.remove(websocket)
-
-async def notify_new_log(log_data):
-    for connection in active_connections:
-        await connection.send_text(json.dumps(log_data))
-        
+def find_employee_image(employee_id: int) -> str:
+    employee_folder = os.path.join(IMAGE_FOLDER, str(employee_id))
+    # Check for supported image formats: jpg and png
+    for extension in ['jpg', 'png']:
+        image_path = os.path.join(employee_folder, f"{employee_id}.{extension}")
+        if os.path.exists(image_path):
+            return f"/images/{employee_id}/{employee_id}.{extension}"
+    return None  # Return None if no image is found
+      
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8001)
