@@ -95,7 +95,7 @@ const UpdateEncoding = () => {
 
     // Append multiple images to FormData
     formData.profile_images.forEach((image) => {
-      formDataObj.append(`profile_images`, image); // `profile_images[]` will send as an array to the backend
+      formDataObj.append(`profile_images`, image); 
     });
 
     axios
