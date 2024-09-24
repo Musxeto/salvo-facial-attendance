@@ -3,7 +3,7 @@ import mysql.connector
 from datetime import datetime, timedelta
 import cv2
 import face_recognition
-import os
+
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
@@ -11,7 +11,6 @@ def get_db_connection():
         password="root",
         database="cms"
     )
-
 
 def today_attendance(cursor, mydb, employee_id, date):
     # Check if an entry for the employee on the given date already exists
@@ -24,8 +23,6 @@ def today_attendance(cursor, mydb, employee_id, date):
     cursor.execute(query, (employee_id, date))
     result = cursor.fetchall()
     
-    print("result", result)
-    
     if len(result) > 1:
         # Extract in_time and out_time
         log_times = [log_time[0] for log_time in result]
@@ -33,19 +30,14 @@ def today_attendance(cursor, mydb, employee_id, date):
         out_time = max(log_times)
         
         Status = "present"
-        print("in time", in_time)
-        print("out time", out_time)
-
+        
         # Calculate hours worked and overtime
         worked = out_time - in_time
         hours_worked = worked.total_seconds() / 3600
         overtime = max(0, hours_worked - 8)
 
         if attendance_record:
-            # Debugging: check the existing time_out value
-            print(f"Existing time_in: {attendance_record[0]}, Existing time_out: {attendance_record[1]}")
-
-            # Record exists: Update time_out and calculate hours if time_out was previously null
+            # Update time_out if record exists
             update_query = '''
                 UPDATE employee_management_attendance
                 SET time_out = %s, hours_worked = %s, is_overtime = %s
@@ -53,10 +45,9 @@ def today_attendance(cursor, mydb, employee_id, date):
             '''
             cursor.execute(update_query, (out_time, hours_worked, overtime, employee_id, date))
             mydb.commit()  # Ensure the update is committed
-            print(f"Attendance for {employee_id} on {date} has been updated with time_out.")
 
         else:
-            # Insert new record with time_out NULL if only logged in
+            # Insert new record
             sql = '''
                 INSERT INTO employee_management_attendance 
                 (employee_id, date, time_in, time_out, status, comments, hours_worked, is_overtime)
@@ -65,14 +56,12 @@ def today_attendance(cursor, mydb, employee_id, date):
             val = (employee_id, date, in_time, out_time, Status, "ok", hours_worked, overtime)
             cursor.execute(sql, val)
             mydb.commit()
-            print(f"Attendance for {employee_id} on {date} has been added to the database.")
     else:
         # If only one log, insert in_time and leave out_time as NULL
         if len(result) == 1:
             in_time = result[0][0]
             Status = "present"
             
-            # Check if an entry exists before inserting a new one
             if not attendance_record:
                 sql = '''
                     INSERT INTO employee_management_attendance 
@@ -82,114 +71,61 @@ def today_attendance(cursor, mydb, employee_id, date):
                 val = (employee_id, date, in_time, Status, "Logged in, no time out yet")
                 cursor.execute(sql, val)
                 mydb.commit()
-                print(f"Attendance for {employee_id} on {date} logged with only in_time (no time_out).")
-            else:
-                print(f"Attendance for {employee_id} on {date} already exists with in_time.")
         else:
             print("Insufficient records to calculate in/out time.")
     
     return
-
-
-    
 def load_known_encodings(cursor):
-    employee_ids = []
-    encoding_list_known = []
-    last_updated = None
-    
+    employee_encodings = {}
+
     print("Loading encoded file...")
-    query = "SELECT EmployeeID, Encoding, updated_at FROM Encodings"
+    query = "SELECT EmployeeID, Encoding FROM Encodings"
     cursor.execute(query)
     employees_data = cursor.fetchall()
 
-    for employee_id, encodings, updated_at in employees_data:
-        employee_ids.append(employee_id)
+    for employee_id, encodings in employees_data:
+        # Assume the encodings are stored as a string of list of lists
         encodings = encodings.replace('\n', '').strip('[]')
-        try:
-            encoding = np.fromstring(encodings, sep=',', dtype=float)
-            if encoding.shape == (128,):
-                encoding_list_known.append(encoding)
-            else:
-                print(f"Warning: Encoding for {employee_id} does not have the expected shape.")
-        except ValueError as e:
-            print(f"Error parsing encoding for {employee_id}: {e}")
+        encoding_lists = encodings.split('], [')  # Split multiple encodings
 
-        last_updated = updated_at
+        employee_encodings_list = []
+        for enc in encoding_lists:
+            enc = enc.strip('[]')  # Clean up each encoding
+            try:
+                encoding = np.fromstring(enc, sep=',', dtype=float)
+                if encoding.shape == (128,):  # Validate the encoding shape
+                    employee_encodings_list.append(encoding)
+                else:
+                    print(f"Warning: Encoding for {employee_id} does not have the expected shape.")
+            except ValueError as e:
+                print(f"Error parsing encoding for {employee_id}: {e}")
+
+        # Add to the dictionary: employee_id -> list of encodings
+        employee_encodings[employee_id] = employee_encodings_list
 
     print("Loaded encoded file")
-    return employee_ids, encoding_list_known, last_updated
+    print("Employee encodings:", employee_encodings)
+    return employee_encodings
 
-
-def cleanupdata(cursor, CurrentDate):
-    daybeforeyesterday = CurrentDate - timedelta(days=2)
+def cleanupdata(cursor, current_date):
+    daybeforeyesterday = current_date - timedelta(days=2)
     query = "DELETE FROM rawdata WHERE date<=%s"
     cursor.execute(query, (daybeforeyesterday,))
     print("Attendance data for", daybeforeyesterday, "has been deleted")
 
-# def calculate_attendance(cursor, mydb, employee_id, date):  
-#     print("Calculating attendance for", employee_id, "on", date)      
-#     query = "SELECT min(log_time) as in_time, max(log_time) as out_time FROM rawdata WHERE employee_id=%s AND date=%s"
-#     cursor.execute(query, (employee_id, date))
-#     print("in time, out time calculated")
-#     result = cursor.fetchone()
-
-#     if result is None:
-#         print("No attendance data found for the given employee_id and date")
-#         return
-
-#     in_time, out_time = result
-#     Status = "present"
-#     print("in time", in_time)
-#     print("out time", out_time)
-#     worked = out_time - in_time
-#     hours_worked = worked.total_seconds() / 3600
-#     overtime = max(0, hours_worked - 8)
-    
-#     query = "SELECT * FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
-#     cursor.execute(query, (employee_id, date))
-#     result = cursor.fetchone()
-#     print("Duplicates:", result)
-
-#     if result is None:
-#         try:
-#             query1 = "INSERT INTO employee_management_attendance (employee_id, date, time_in, time_out, status, hours_worked, is_overtime, comments) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-#             cursor.execute(query1, (employee_id, date, in_time, out_time, Status, hours_worked, overtime, "ok"))
-#             mydb.commit()
-#         except Exception as e:
-#             print("Error:", str(e))
-#             return
-#     else:
-#         print("Attendance Record Already Exists")
- 
-#     print(f"Attendance for {employee_id} on {date} has been added to the database")
-
-# def final_Attendance(cursor, mydb, employee_ids, date):
-#     for employee_id in employee_ids:
-#         calculate_attendance(cursor, mydb, employee_id[0], date)
-
 def log_attendance(cursor, mydb, employee_id):
     current_date = datetime.now().date()
     current_time = datetime.now().time()
-    check_current_time = datetime.now().time() 
-    total_seconds = check_current_time.hour * 3600 + check_current_time.minute * 60 + check_current_time.second + check_current_time.microsecond / 1_000_000
-    print("total seconds", total_seconds)
+    total_seconds = current_time.hour * 3600 + current_time.minute * 60 + current_time.second + current_time.microsecond / 1_000_000
     
     query = "SELECT * FROM rawdata WHERE employee_id=%s AND date=%s ORDER BY log_time DESC LIMIT 1"
     cursor.execute(query, (employee_id, current_date))
     result = cursor.fetchone()
-    print("result", result)
-    print("!")
+
     if result is not None:
-        print("here")
         last_log_time = result[3]  
-        print("last log time", last_log_time)
-        print("type " , type(last_log_time))
-        
-        print("current time", check_current_time)
-        print("last log time in seconds`", last_log_time.seconds)
         time_difference = total_seconds - last_log_time.total_seconds()
-        print("time difference", time_difference)
-        if time_difference < 10:
+        if time_difference < 2:
             return
 
     query = "INSERT INTO rawdata (employee_id, date, log_time) VALUES (%s, %s, %s)"
@@ -201,12 +137,12 @@ def main():
     mydb = get_db_connection()
     cursor = mydb.cursor()
 
-    # Load initial encodings
-    employee_ids, encoding_list_known, last_update = load_known_encodings(cursor)
+    # Load the encodings into a dictionary where employee_id is the key
+    employee_encodings = load_known_encodings(cursor)
 
     cap = cv2.VideoCapture(0)
-    cap.set(3, 1280)  
-    cap.set(4, 720)   
+    cap.set(3, 1280)  # Width
+    cap.set(4, 720)   # Height
 
     refresh_interval = 60  # Check for updates every 60 seconds
     last_check_time = datetime.now()
@@ -214,10 +150,7 @@ def main():
     while True:
         current_time = datetime.now()
         current_date = current_time.date() 
-        previous_date = current_time.date() - timedelta(days=1)
         current_time_only = current_time.time()
-
-
 
         success, img = cap.read()
         if not success:
@@ -230,54 +163,50 @@ def main():
         encode_current_frame = face_recognition.face_encodings(img_small, face_current_frame)
 
         for encode_face, face_location in zip(encode_current_frame, face_current_frame):
-            # Compare faces and get distances
-            face_distance = face_recognition.face_distance(encoding_list_known, encode_face)
+            best_match_index = None
+            best_distance = float('inf')  # Initialize with a large number
+            employee_id_best = None
 
-            if len(face_distance) <= 0:
-                print("No face distances found.")
-                continue
+            # Compare current frame encoding against all known encodings for each employee
+            for employee_id, known_encodings in employee_encodings.items():
+                for known_encoding in known_encodings:
+                    face_distance = face_recognition.face_distance([known_encoding], encode_face)[0]
+                    
+                    if face_distance < best_distance:
+                        best_distance = face_distance
+                        employee_id_best = employee_id
 
-            # Find the best match with minimum distance
-            best_match_index = np.argmin(face_distance)
-            best_distance = face_distance[best_match_index]
+            # Set a threshold for the minimum distance
+            if best_distance < 0.35 : # Adjust threshold as needed
+                print(f"Known face detected: {employee_id_best} with distance: {best_distance}")
 
-            # Set a stricter threshold for the distance (e.g., 0.4)
-            if best_distance < 0.4:
-                employee_id = employee_ids[best_match_index]
-                print(f"Known face detected: {employee_id} with distance: {best_distance}")
-
-                # Draw rectangle around the face
+                # Draw rectangle and display employee ID
                 top, right, bottom, left = face_location
                 top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4
                 cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 2)
 
-                # Display the employee ID
-                employee_id_str = str(employee_id)
+                employee_id_str = str(employee_id_best)
                 cv2.putText(img, employee_id_str, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
 
                 # Log attendance
-                log_attendance(cursor, mydb, employee_id)
+                log_attendance(cursor, mydb, employee_id_best)
             else:
                 print(f"Face distance too large: {best_distance}, no match.")
-        
+
         # Check if it's time to refresh encodings
         if (current_time - last_check_time).total_seconds() >= refresh_interval:
-            employee_ids, encoding_list_known, new_last_update = load_known_encodings(cursor)
-            if last_update != new_last_update:
-                print("Encodings updated.")
-                last_update = new_last_update
+            employee_encodings = load_known_encodings(cursor)
             last_check_time = current_time
 
-        
-        print("Attendance for the day has been closed")
-        query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
-        cursor.execute(query, (current_date,))
-        result = cursor.fetchall()
-        print("result", result)
-        for employee_id in result:
-            today_attendance(cursor,mydb,employee_id[0],current_date)
-        print("Attendance added to the database")
-        cleanupdata(cursor,current_date)
+        # Process daily attendance after a specific time (e.g., 5 PM)
+        if current_time_only >= datetime.strptime("17:00", "%H:%M").time():
+            query = "SELECT DISTINCT employee_id FROM rawdata WHERE date=%s"
+            cursor.execute(query, (current_date,))
+            result = cursor.fetchall()
+            for employee_id in result:
+                today_attendance(cursor, mydb, employee_id[0], current_date)
+            print("Attendance added to the database")
+            cleanupdata(cursor, current_date)
 
         cv2.imshow("Face Attendance", img)
 
@@ -290,9 +219,3 @@ def main():
     mydb.close()
 
 main()
-
-
-
-# mydb = get_db_connection()
-# cursor = mydb.cursor()
-# today_attenance(cursor, mydb, 56, "2024-09-16")
