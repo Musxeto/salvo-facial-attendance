@@ -66,6 +66,61 @@ def today_attendance(cursor, mydb, employee_id, log_time, log_type):
         else:
             print(f"Cannot log time-out without time-in for employee {employee_id}.")
 
+def log_raw_data(cursor, mydb, employee_id, log_type, log_time):
+    query = '''
+        INSERT INTO rawdata (employee_id, log_type, log_time, date)
+        VALUES (%s, %s, %s, %s)
+    '''
+    values = (employee_id, log_type, log_time, log_time.date())
+    
+    try:
+        cursor.execute(query, values)
+        mydb.commit()
+        print(f"Raw data logged for employee {employee_id} with log type {log_type} at {log_time}.")
+    except Exception as e:
+        print(f"Error logging raw data for employee {employee_id}: {e}")
+
+def process_camera_frame(cursor, mydb, img, employee_encodings, log_type, label):
+    img_small = cv2.resize(img, (0, 0), None, 0.25, 0.25)
+    img_small = cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB)
+
+    face_current_frame = face_recognition.face_locations(img_small)
+    encode_current_frame = face_recognition.face_encodings(img_small, face_current_frame)
+
+    for encode_face, face_location in zip(encode_current_frame, face_current_frame):
+        best_match_index = None
+        best_distance = float('inf')
+        employee_id_best = None
+
+        for employee_id, known_encodings in employee_encodings.items():
+            for known_encoding in known_encodings:
+                face_distance = face_recognition.face_distance([known_encoding], encode_face)[0]
+                if face_distance < best_distance:
+                    best_distance = face_distance
+                    employee_id_best = employee_id
+
+        if best_distance < 0.35:
+            print(f"Known face detected: {employee_id_best} with distance: {best_distance}")
+            
+            # Log attendance
+            log_attendance(cursor, mydb, employee_id_best, log_type)
+            
+            # Log raw data
+            log_raw_data(cursor, mydb, employee_id_best, log_type, datetime.now())
+
+            # Draw rectangle and add label for the recognized face
+            top, right, bottom, left = face_location
+            top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4
+            cv2.rectangle(img, (left, top), (right, bottom), (0, 255, 0), 2)
+            cv2.putText(img, f"ID: {employee_id_best}", (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+        else:
+            print(f"Face distance too large: {best_distance}, no match.")
+
+    # Add label for the frame (IN/OUT)
+    cv2.putText(img, label, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 3)
+
+    return img
+
 def load_known_encodings(cursor):
     employee_encodings = {}
 
@@ -129,10 +184,10 @@ def process_camera_frame(cursor, mydb, img, employee_encodings, log_type, label)
                     best_distance = face_distance
                     employee_id_best = employee_id
 
-        if best_distance < 0.35:
+        if best_distance < 0.38:
             print(f"Known face detected: {employee_id_best} with distance: {best_distance}")
             log_attendance(cursor, mydb, employee_id_best, log_type)
-
+            log_raw_data(cursor, mydb, employee_id_best, log_type, datetime.now())
             # Draw rectangle and add label for the recognized face
             top, right, bottom, left = face_location
             top, right, bottom, left = top * 4, right * 4, bottom * 4, left * 4

@@ -49,6 +49,7 @@ class PopupResponse(BaseModel):
     log_time: time
     employee_name: str
     employee_image: str
+    log_type: str
     
 
 @app.get("/search_employee/")
@@ -227,18 +228,19 @@ def get_last_log():
     try:
         mydb = get_db_connection()
         cursor = mydb.cursor()
-        query = "SELECT employee_id, log_time FROM rawdata WHERE date=%s ORDER BY log_time DESC LIMIT 1"
+        query = "SELECT employee_id, log_time,log_type FROM rawdata WHERE date=%s ORDER BY log_time DESC LIMIT 1"
         cursor.execute(query, (current_date,))
         log = cursor.fetchone()
 
         if log:
             employee_id = log[0]
             log_time = log[1]
-
+            log_type = log[2]
+            
             # Debug output
             print("Fetched log:", log)
             print("log_time type:", type(log_time))
-
+            print("last_log_type :",log_type)
             # Fetch employee name
             query3 = "SELECT username from employee_management_employee where id=%s"
             cursor.execute(query3, (employee_id,))
@@ -262,7 +264,8 @@ def get_last_log():
                 "employee_name": employee_name,
                 "date": current_date,
                 "log_time": log_time_str,
-                "employee_image": employee_image
+                "employee_image": employee_image,
+                "log_type": log_type,
             }
 
         raise HTTPException(status_code=404, detail="No logs found for today")
