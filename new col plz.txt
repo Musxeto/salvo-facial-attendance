@@ -1,0 +1,1 @@
+ALTER TABLE rawdata ADD COLUMN log_type ENUM('in', 'out') NOT NULL;
