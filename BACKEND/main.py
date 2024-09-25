@@ -16,7 +16,12 @@ def today_attendance(cursor, mydb, employee_id, log_time, log_type):
     date = log_time.date()
     check_query = "SELECT time_in, time_out FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
     cursor.execute(check_query, (employee_id, date))
-    attendance_record = cursor.fetchone()
+    
+    # Fetch all results
+    attendance_record = cursor.fetchall()
+    
+    if attendance_record:
+        attendance_record = attendance_record[0]  # Get the first result
 
     if log_type == 'in':
         if not attendance_record:
@@ -39,14 +44,11 @@ def today_attendance(cursor, mydb, employee_id, log_time, log_type):
                 print(f"Time-in is None for employee {employee_id}.")
                 return  # Exit or handle the error
             
-            # Convert time_in from timedelta to time
             time_in = (datetime.min + time_in).time()  # Convert to time
-
             log_time_only = log_time.time()  # Extract the time part for comparison
 
-            # Calculate worked time
             worked = datetime.combine(datetime.min, log_time_only) - datetime.combine(datetime.min, time_in)
-            if isinstance(worked, timedelta):  # Ensure worked is a timedelta object
+            if isinstance(worked, timedelta):
                 hours_worked = worked.total_seconds() / 3600
                 overtime = max(0, hours_worked - 8)
 
@@ -65,7 +67,6 @@ def today_attendance(cursor, mydb, employee_id, log_time, log_type):
                 print(f"Worked time calculation error for employee {employee_id}.")
         else:
             print(f"Cannot log time-out without time-in for employee {employee_id}.")
-
 def log_raw_data(cursor, mydb, employee_id, log_type, log_time):
     query = '''
         INSERT INTO rawdata (employee_id, log_type, log_time, date)
@@ -201,6 +202,36 @@ def process_camera_frame(cursor, mydb, img, employee_encodings, log_type, label)
 
     return img
 
+def mark_absent_employees(cursor, mydb, current_date):
+    cursor.execute("SELECT id FROM employee_management_employee")  
+    all_employees = cursor.fetchall()
+
+    for (employee_id,) in all_employees:
+        # Check if there is a time_in record for today
+        check_query = "SELECT time_in FROM employee_management_attendance WHERE employee_id=%s AND date=%s"
+        cursor.execute(check_query, (employee_id, current_date))
+        
+        # Fetch attendance record
+        attendance_record = cursor.fetchall()
+
+        if not attendance_record or attendance_record[0][0] is None:  # No time_in record
+            # Check if the employee is already marked as absent
+            absent_check_query = "SELECT * FROM employee_management_attendance WHERE employee_id=%s AND date=%s AND status='absent'"
+            cursor.execute(absent_check_query, (employee_id, current_date))
+            absent_record = cursor.fetchall()
+
+            if not absent_record:  # If no absence record exists
+                # If there's no time_in record, mark as absent
+                sql = '''
+                    INSERT INTO employee_management_attendance 
+                    (employee_id, date, time_in, status, comments, hours_worked, is_overtime)
+                    VALUES (%s, %s, NULL, %s, %s, NULL, 0)
+                '''
+                val = (employee_id, current_date, "absent", "No log-in recorded")  # Store as NULL for time_in
+                cursor.execute(sql, val)
+                mydb.commit()
+                print(f"Marked employee {employee_id} as absent for {current_date}.")  
+
 def main():
     mydb = get_db_connection()
     cursor = mydb.cursor()
@@ -208,6 +239,9 @@ def main():
     # Load the encodings into a dictionary where employee_id is the key
     employee_encodings = load_known_encodings(cursor)
 
+    ip_camera_in_url = "rtsp://username:password@ip_in_address:port/stream_path"
+    ip_camera_out_url = "rtsp://username:password@ip_out_address:port/stream_path"
+    
     cap_in = cv2.VideoCapture(0)  # Camera for time-in
     cap_out = cv2.VideoCapture(1)  # Camera for time-out
     cap_in.set(3, 1280)  # Width for time-in camera
@@ -243,7 +277,11 @@ def main():
             employee_encodings = load_known_encodings(cursor)
             last_check_time = current_time
 
-        cleanupdata(cursor,current_date)
+        
+        if current_time.hour == 16 and 17 <= current_time.minute <= 20:
+            mark_absent_employees(cursor, mydb, current_date)
+            cleanupdata(cursor,current_date)
+        
         # Quit if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
