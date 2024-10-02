@@ -2,9 +2,7 @@ import numpy as np
 import mysql.connector
 from datetime import datetime, timedelta
 import cv2
-import time
 import face_recognition
-from checkinimutil import WebCamVideoStream,FPS
 
 def get_db_connection():
     return mysql.connector.connect(
@@ -233,7 +231,65 @@ def mark_absent_employees(cursor, mydb, current_date):
                 cursor.execute(sql, val)
                 mydb.commit()
                 print(f"Marked employee {employee_id} as absent for {current_date}.")  
-def start_stream(url):
-    video_stream = WebCamVideoStream(url).start()
-    fps = FPS().start()
-    return video_stream, fps
+
+def main():
+    mydb = get_db_connection()
+    cursor = mydb.cursor()
+    
+    # Load the encodings into a dictionary where employee_id is the key
+    employee_encodings = load_known_encodings(cursor)
+
+    ip_camera_in_url = "rtsp://username:password@ip_in_address:port/stream_path"
+    ip_camera_out_url = "rtsp://username:password@ip_out_address:port/stream_path"
+    
+    cap_in = cv2.VideoCapture(0)  # Camera for time-in
+    cap_out = cv2.VideoCapture(1)  # Camera for time-out
+    cap_in.set(3, 1280)  # Width for time-in camera
+    cap_in.set(4, 720)   # Height for time-in camera
+    cap_out.set(3, 1280)  # Width for time-out camera
+    cap_out.set(4, 720)   # Height for time-out camera
+
+    refresh_interval = 60  
+    last_check_time = datetime.now()
+
+    while True:
+        current_time = datetime.now()
+        current_date = current_time.date()
+
+        # Process time-in camera
+        success_in, img_in = cap_in.read()
+        if success_in:
+            img_in = process_camera_frame(cursor, mydb, img_in, employee_encodings, 'in', 'IN')
+
+        # Process time-out camera
+        success_out, img_out = cap_out.read()
+        if success_out:
+            img_out = process_camera_frame(cursor, mydb, img_out, employee_encodings, 'out', 'OUT')
+
+        # Display the frames
+        if success_in:
+            cv2.imshow("Time-IN Camera", img_in)
+        if success_out:
+            cv2.imshow("Time-OUT Camera", img_out)
+
+        # Refresh known encodings every minute
+        if (current_time - last_check_time).total_seconds() >= refresh_interval:
+            employee_encodings = load_known_encodings(cursor)
+            last_check_time = current_time
+
+        
+        if current_time.hour == 16 and 17 <= current_time.minute <= 20:
+            mark_absent_employees(cursor, mydb, current_date)
+            cleanupdata(cursor,current_date)
+        
+        # Quit if 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap_in.release()
+    cap_out.release()
+    cv2.destroyAllWindows()
+    cursor.close()
+    mydb.close()
+
+main()
