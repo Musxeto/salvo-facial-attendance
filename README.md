@@ -1,5 +1,7 @@
 # Salvo Facial Attendance System
 
+[look it here plz](https://www.linkedin.com/posts/mustafa-gm_intern-webdev-facerecognition-activity-7244046709087997952-5p6E)
+
 - Sep 2024 - Oct 2024Sep 2024 - Oct 2024
 
 - Associated with Salvo Pvt Limited
